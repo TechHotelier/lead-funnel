@@ -50,7 +50,7 @@ function updateProgress() { const pct = Math.round((depthIndex() / totalSteps())
 function updateBreadcrumb() { const cat = d.kategorie || ''; const typ = d.haus_typ || d.wohnung_typ || ''; let parts = []; if (cat) parts.push(cat); if (typ) parts.push(typ); const bc = document.getElementById('breadcrumb'); bc.innerHTML = parts.length ? parts.map((p,i) => i===parts.length-1 ? `<span>${p}</span>` : p).join(' › ') : '';
 }
 function reflow(el) { void el.offsetWidth;}
-function render(id) { currentStep = id; updateProgress(); updateBreadcrumb(); const s = STEPS[id]; if (!s) return; const card = document.getElementById('mk-card'); card.style.animation = 'none'; reflow(card); card.style.animation = ''; const cont = document.getElementById('step-content'); cont.innerHTML = ''; const titleEl = document.createElement('div'); titleEl.className = 'step-title'; titleEl.textContent = s.title; cont.appendChild(titleEl); if (s.type === 'options') renderOptions(s, cont); else if (s.type === 'fields') renderFields(s, cont); else if (s.type === 'num_picker') renderNumPicker(s, cont); else if (s.type === 'mfh_miete') renderMfhMiete(s, cont); else if (s.type === 'lage_step') renderLageStep(s, cont); else if (s.type === 'kontakt') renderKontakt(cont);
+function render(id) { currentStep = id; updateProgress(); updateBreadcrumb(); const s = STEPS[id]; if (!s) return; const card = document.getElementById('mk-card'); if(!card){setTimeout(()=>render(id),50);return;} card.style.animation = 'none'; reflow(card); card.style.animation = ''; const cont = document.getElementById('step-content'); cont.innerHTML = ''; const titleEl = document.createElement('div'); titleEl.className = 'step-title'; titleEl.textContent = s.title; cont.appendChild(titleEl); if (s.type === 'options') renderOptions(s, cont); else if (s.type === 'fields') renderFields(s, cont); else if (s.type === 'num_picker') renderNumPicker(s, cont); else if (s.type === 'mfh_miete') renderMfhMiete(s, cont); else if (s.type === 'lage_step') renderLageStep(s, cont); else if (s.type === 'kontakt') renderKontakt(cont);
 }
 function renderOptions(s, cont) { if (s.tooltip) { const tw = document.createElement('div'); tw.className = 'tooltip-wrap'; tw.innerHTML = `<div class="tip-icon">?</div><div class="tip-label">${s.tooltip.l}</div><div class="tooltip-box">${s.tooltip.text}</div>`; tw.addEventListener('click', () => tw.classList.toggle('open')); cont.appendChild(tw); cont.appendChild(document.createElement('br'));
  }
@@ -391,5 +391,16 @@ function groupFields(fields) { const pairs=[]; let i=0; while(i<fields.length){ 
  }
   return pairs;
 }
-render('root');
+function _mkInit(){
+  if(document.getElementById('mk-card')){
+    render('root');
+  } else {
+    setTimeout(_mkInit, 100);
+  }
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', _mkInit);
+} else {
+  _mkInit();
+}
 })();
