@@ -107,6 +107,7 @@ body{font-family:var(--font-body);background:var(--bg-soft);min-height:100vh;dis
 <script>
 
 const SB_URL='https://bnxnszpomjmsnxrfrmnz.supabase.co';
+window.CLAUDE_KEY=''; // Anthropic API Key hier einfügen
 const SB_KEY='sb_publishable_lRXWlrcn2h0GwvljXBkGkw_4EONay_A';
 const KEY='c60da694-19cc-42e8-8fd6-5a1407309786';
 const ADS_KEY='ads_avwSKnQ5V7BTC3sJ1775684710524ALB2vUU8NrXA9TiI';
@@ -318,7 +319,7 @@ function renderKontakt(cont) { const nudge = document.createElement('div'); nudg
     { name:'name', l:'Vor- & Nachname',  placeholder:'Max Mustermann', type:'text',  validate:'name',  hint:'Bitte Vor- und Nachname eingeben.'}, { name:'email',l:'E-Mail-Adresse', placeholder:'max@beispiel.de', type:'email', validate:'email', hint:'Format: name@domain.de'}, { name:'phone',l:'Mobilnummer', placeholder:'0170 / 123 456 78', type:'tel', validate:'phone', hint:'Mit Vorwahl, mind. 10 Ziffern.'}, ]; contactFields.forEach(f => { const g = document.createElement('div'); g.className='fg'; g.innerHTML = `<label>${f.l}</label><input type="${f.type}" id="fi_${f.name}" placeholder="${f.placeholder}" autocomplete="off" value="${d[f.name]||''}">`; if(f.hint){ const h=document.createElement('div'); h.className='input-hint'; h.textContent=f.hint; g.appendChild(h);}
     cont.appendChild(g); if(f.name==='phone'){ g.querySelector('input').addEventListener('focus', ()=>{ document.getElementById('nudge').style.display='block';}); }
     setTimeout(()=>{ const inp=document.getElementById('fi_'+f.name); if(inp) attachLiveValidation(inp, f.validate);}, 0);
- }); const cw = document.createElement('div'); cw.className='consent-wrap'; cw.innerHTML=`<input type="checkbox" id="consent"><label for="consent">Ich stimme der <a href="https://www.mk-consulting.immo/rechtliches/datenschutzerklarung" onclick="return false">Datenschutzerklärung</a> von MK Immobilien Consulting sowie einer möglichen Kontaktaufnahme zu.</label>`; cont.appendChild(cw); const btn = document.createElement('button'); btn.className='btn'; btn.id='submit-btn'; btn.textContent='Kostenlose Bewertung anfordern →'; btn.onclick = submitForm; cont.appendChild(btn); const errEl = document.createElement('div'); errEl.className='err'; errEl.id='err'; cont.appendChild(errEl); const trust = document.createElement('div'); trust.className='trust-row'; trust.innerHTML=`<div class="trust-item"><span>✓</span> Kostenlos & unverbindlich</div><div class="trust-item"><span>✓</span> Kein Spam</div><div class="trust-item"><span>✓</span> Antwort innerhalb 24h</div>`; cont.appendChild(trust); if (path.length > 0) cont.appendChild(backBtn());
+ }); const cw = document.createElement('div'); cw.className='consent-wrap'; cw.innerHTML=`<input type="checkbox" id="consent"><label for="consent">Ich stimme der <a href="https://www.mk-consulting.immo/rechtliches/datenschutzerklarung" target="_blank" rel="noopener">Datenschutzerklärung</a> von MK Immobilien Consulting sowie einer möglichen Kontaktaufnahme zu.</label>`; cont.appendChild(cw); const btn = document.createElement('button'); btn.className='btn'; btn.id='submit-btn'; btn.textContent='Kostenlose Bewertung anfordern →'; btn.onclick = submitForm; cont.appendChild(btn); const errEl = document.createElement('div'); errEl.className='err'; errEl.id='err'; cont.appendChild(errEl); const trust = document.createElement('div'); trust.className='trust-row'; trust.innerHTML=`<div class="trust-item"><span>✓</span> Kostenlos & unverbindlich</div><div class="trust-item"><span>✓</span> Kein Spam</div><div class="trust-item"><span>✓</span> Antwort innerhalb 24h</div>`; cont.appendChild(trust); if (path.length > 0) cont.appendChild(backBtn());
 }
 
 function goTo(id) { path.push(currentStep); render(id); window.scrollTo({top:0,behavior:'smooth'});
@@ -611,6 +612,21 @@ const bfLabel=!_by?'':_by>=2024?(_iH?'Neubau 2024+ Haus +32%':_iW?'Neubau 2024+ 
     </div>
   `;
 
+  // KI-Analyse asynchron nachladen
+  if (window.CLAUDE_KEY) {
+    const claudeBox = renderClaudeBox(cont);
+    fetchClaudeAnalyse(result).then(text => {
+      const statusEl  = document.getElementById('claude-status');
+      const contentEl = document.getElementById('claude-content');
+      if (text) {
+        if(statusEl)  statusEl.textContent  = '✓ Analyse bereit';
+        if(contentEl) contentEl.innerHTML   = parseClaudeText(text);
+      } else {
+        if(statusEl)  statusEl.textContent  = '–';
+        if(contentEl) contentEl.textContent = 'KI-Analyse aktuell nicht verfügbar.';
+      }
+    });
+  }
 }
 
 function groupFields(fields) { const pairs=[]; let i=0; while(i<fields.length){ if(fields[i].full){ pairs.push([fields[i]]); i++;}
@@ -618,6 +634,99 @@ function groupFields(fields) { const pairs=[]; let i=0; while(i<fields.length){ 
     else { pairs.push([fields[i]]); i++;}
  }
   return pairs;
+}
+
+/* ══════════════════════════════════════════════════════
+   CLAUDE AI BEWERTUNG
+   Ruft Anthropic API auf und zeigt KI-Analyse im Ergebnis
+   ══════════════════════════════════════════════════════ */
+async function fetchClaudeAnalyse(result) {
+  const kat   = d.kategorie || '';
+  const typ   = d.haus_typ || d.wohnung_typ || '';
+  const fmt   = n => new Intl.NumberFormat('de-DE').format(Math.round(n));
+  const ew    = ertragswert();
+
+  const prompt = `Du bist ein erfahrener Immobilienexperte in Deutschland.
+Analysiere folgende Immobilie und gib eine prägnante, professionelle Bewertung auf Deutsch.
+
+IMMOBILIENDATEN:
+- Typ: ${kat}${typ?' ('+typ+')':''}
+- Lage: ${d.strasse||''}, ${d.plz||''} ${d.ort||''}
+- Wohnfläche: ${d.wohnflaeche||'k.A.'} m²
+- Zimmer: ${d.zimmer||'k.A.'}
+- Baujahr: ${d.baujahr||'k.A.'}
+- Ausstattung: ${d.ausstattung||'Normal'}
+- Lage-Kategorie (München): ${d.lage||'–'}
+${d.grundstueck?'- Grundstück: '+d.grundstueck+' m²':''}
+${d.mfh_einheiten?'- Wohneinheiten: '+d.mfh_einheiten:''}
+${ew?'- Jahresmiete (Ist): '+fmt(ew.istJahr)+' €':''}
+${ew?'- Jahresmiete (Soll): '+fmt(ew.sollJahr)+' €':''}
+
+MARKTANALYSE-ERGEBNIS:
+- Geschätzter Marktwert: ${fmt(result.rangeMin)} – ${fmt(result.rangeMax)} €
+- Ø €/m²: ${fmt(result.finalSqm)} €
+- Datenbasis: ${result.srcLabel}
+${ew?'- Ertragswert: '+fmt(ew.wertLo)+' – '+fmt(ew.wertHi)+' €':''}
+
+Erstelle eine strukturierte Bewertung mit exakt diesen 4 Abschnitten (jeweils 2-3 Sätze):
+1. **Markteinschätzung** – Wie realistisch ist der ermittelte Wert? Marktlage?
+2. **Stärken der Immobilie** – Was wertet die Immobilie auf?
+3. **Risiken & Hinweise** – Worauf sollte der Eigentümer achten?
+4. **Empfehlung** – Konkreter nächster Schritt für den Eigentümer.
+
+Antworte NUR mit den 4 Abschnitten, keine Einleitung, kein Fazit.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': window.CLAUDE_KEY || '',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 600,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.content?.[0]?.text || null;
+  } catch(e) { return null; }
+}
+
+function renderClaudeBox(container) {
+  const box = document.createElement('div');
+  box.id = 'claude-analyse';
+  box.style.cssText = 'margin-top:1.25rem;border:.5px solid var(--teal-mid);border-radius:var(--radius-sm);overflow:hidden';
+  box.innerHTML = `
+    <div style="background:var(--teal-light);padding:.6rem 1rem;display:flex;align-items:center;gap:8px">
+      <div style="font-size:11px;font-weight:500;color:var(--teal-dark);text-transform:uppercase;letter-spacing:.05em;flex:1">KI-Analyse durch Claude</div>
+      <div id="claude-status" style="font-size:11px;color:var(--teal-dark)">wird geladen…</div>
+    </div>
+    <div id="claude-content" style="padding:.9rem 1rem;font-size:13px;color:var(--muted);line-height:1.7">
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="width:14px;height:14px;border:2px solid var(--teal-mid);border-top-color:var(--teal);border-radius:50%;animation:_sp .7s linear infinite;flex-shrink:0"></div>
+        Claude analysiert die Immobilie…
+      </div>
+    </div>`;
+  container.appendChild(box);
+  return box;
+}
+
+function parseClaudeText(text) {
+  // Convert **Titel** markdown to HTML sections
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--text)">$1</strong>')
+    .replace(/
+
+/g, '</p><p style="margin-top:.6rem">')
+    .replace(/
+/g, '<br>')
+    .replace(/^/, '<p>')
+    .replace(/$/, '</p>');
 }
 
 render('root');
