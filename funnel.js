@@ -1,0 +1,395 @@
+(function(){
+'use strict';
+if(!window.MK_W3F_KEY||!window.MK_ADS_KEY){console.warn('MK Funnel: Bitte MK_W3F_KEY und MK_ADS_KEY setzen.');}
+const KEY = window.MK_W3F_KEY || '';
+const d = {}; // collected data
+let path = []; // step history stack
+const STEPS = { root: { title: 'Was möchten Sie bewerten?', type: 'options', options: [
+  { icon:'🏠', lbl:'Haus bewerten', sub:'Einfamilienhaus, Reihenhaus, Doppelhaus', next:'haus_type'}, { icon:'🏢', lbl:'Wohnung bewerten', sub:'ETW, Penthouse, Dachgeschoss ...', next:'wohnung_type'}, { icon:'🌳', lbl:'Grundstück bewerten',sub:'Bauland, Gewerblich, Freifläche', next:'grund_flaeche'}, ], cols: 1, key: 'kategorie',
+ }, haus_type: { title: 'Welche Art von Haus möchten Sie bewerten?', type: 'options', cols: 2, key: 'haus_typ', options: [
+  { icon:'🏡', lbl:'Einfamilienhaus',  sub:'Freistehendes Haus', next:'haus_wohnflaeche'}, { icon:'🏘️', lbl:'Zweifamilienhaus', sub:'Zwei Wohneinheiten', next:'haus_wohnflaeche'}, { icon:'🏗️', lbl:'Mehrfamilienhaus', sub:'3+ Wohneinheiten', next:'mfh_einheiten'}, { icon:'🔚', lbl:'Reihenendhaus', sub:'Eckposition der Reihe',  next:'haus_wohnflaeche'}, { icon:'🏠', lbl:'Reihenmittelhaus', sub:'Mittleres Reihenhaus', next:'haus_wohnflaeche'}, { icon:'🏠', lbl:'Doppelhaushälfte', sub:'Eine Hälfte eines Doppelhauses', next:'haus_wohnflaeche'}, ],
+ }, haus_wohnflaeche: { title: 'Wie groß ist die Wohnfläche?', type: 'fields', fields: [{ name:'wohnflaeche',l:'Wohnfläche in m²', placeholder:'z.B. 140', validate:'flaeche', hint:'Bitte einen realistischen Wert zwischen 20 und 2.000 m² eingeben.'}], next: 'haus_zimmer',
+ }, haus_zimmer: { title: 'Wie viele Zimmer hat die Immobilie?', type: 'num_picker', sub: 'ohne Bad und Küche', key: 'zimmer', min:1, max:20, next: 'haus_baujahr',
+ }, haus_baujahr: { title: 'Wann wurde die Immobilie erbaut?', type: 'fields', fields: [{ name:'baujahr',l:'Baujahr', placeholder:'z.B. 1998', validate:'baujahr', hint:'Bitte ein Jahr zwischen 1850 und ' + new Date().getFullYear() + ' eingeben.'}], next: 'haus_qualitaet',
+ }, haus_qualitaet: { title: 'Wie ist die Ausstattung der Immobilie?', type: 'options', cols: 2, key: 'ausstattung', options: [
+  { icon:'🔲', lbl:'Einfach',  sub:'Standardbad, kein Parkett', next:'adresse'}, { icon:'🔷', lbl:'Normal', sub:'Zeitgemäß, solide Qualität', next:'adresse'}, { icon:'💎', lbl:'Gehoben',  sub:'Parkett, hochwertiges Bad', next:'adresse'}, { icon:'👑', lbl:'Luxus', sub:'Marmor, Smart Home, Luxusküche', next:'adresse'}, ],
+ }, mfh_einheiten: { title: 'Wie viele Wohneinheiten hat die Immobilie?', type: 'fields', fields: [{ name:'mfh_einheiten',l:'Anzahl Wohneinheiten', placeholder:'z.B. 6', validate:'einheiten', hint:'Mindestens 3 Einheiten für ein Mehrfamilienhaus.'}], next: 'mfh_miete',
+ }, mfh_miete: { title: 'Welche Mieteinnahmen erzielt die Immobilie?', type: 'mfh_miete', next: 'mfh_grundstueck',
+ }, mfh_grundstueck: { title: 'Wie groß ist das Grundstück?', type: 'fields', fields: [{ name:'grundstueck',l:'Grundstücksfläche in m²', placeholder:'z.B. 600', validate:'grundstueck', hint:'Bitte einen Wert zwischen 50 und 50.000 m² eingeben.'}], next: 'mfh_baujahr',
+ }, mfh_baujahr: { title: 'Wann wurde die Immobilie erbaut?', type: 'fields', fields: [{ name:'baujahr',l:'Baujahr', placeholder:'z.B. 1972', validate:'baujahr', hint:'Bitte ein Jahr zwischen 1850 und ' + new Date().getFullYear() + ' eingeben.'}], next: 'haus_qualitaet',
+ }, wohnung_type: { title: 'Wählen Sie die Art Ihrer Wohnung', type: 'options', cols: 2, key: 'wohnung_typ', options: [
+  { icon:'🏙️', lbl:'Dachgeschoss',  sub:'Oberste Etage, Dachfenster', next:'wohnung_flaeche'}, { icon:'🏢', lbl:'Erdgeschoss', sub:'Ebenerdig, Gartenzugang', next:'wohnung_flaeche'}, { icon:'🔢', lbl:'Etagenwohnung', sub:'Standard Stockwerkswohnung', next:'wohnung_flaeche'}, { icon:'🪜', lbl:'Maisonette', sub:'Zwei Etagen innerhalb der Whg', next:'wohnung_flaeche'}, { icon:'🌇', lbl:'Penthouse', sub:'Oberste Etage, Exklusiv', next:'wohnung_flaeche'}, { icon:'⬇️', lbl:'Souterrain', sub:'Unterhalb Straßenniveau', next:'wohnung_flaeche'}, { icon:'🌿', lbl:'Terrassenwohnung', sub:'Mit eigenem Terrassenzugang', next:'wohnung_flaeche'}, ],
+ }, wohnung_flaeche: { title: 'Wie groß ist die Wohnfläche?', type: 'fields', fields: [{ name:'wohnflaeche',l:'Wohnfläche in m²', placeholder:'z.B. 85', validate:'flaeche', hint:'Bitte einen Wert zwischen 15 und 1.000 m² eingeben.'}], next: 'wohnung_zimmer',
+ }, wohnung_zimmer: { title: 'Wie viele Zimmer hat die Wohnung?', type: 'num_picker', sub: 'ohne Bad und Küche', key: 'zimmer', min:1, max:12, next: 'wohnung_baujahr',
+ }, wohnung_baujahr: { title: 'Wann wurde die Immobilie erbaut?', type: 'fields', fields: [{ name:'baujahr',l:'Baujahr', placeholder:'z.B. 2005', validate:'baujahr', hint:'Bitte ein Jahr zwischen 1850 und ' + new Date().getFullYear() + ' eingeben.'}], next: 'wohnung_qualitaet',
+ }, wohnung_qualitaet: { title: 'Wie ist die Ausstattung der Wohnung?', type: 'options', cols: 2, key: 'ausstattung', options: [
+  { icon:'🔲', lbl:'Einfach',  sub:'Standardbad, kein Parkett', next:'adresse'}, { icon:'🔷', lbl:'Normal', sub:'Zeitgemäß, solide Qualität', next:'adresse'}, { icon:'💎', lbl:'Gehoben',  sub:'Parkett, hochwertiges Bad', next:'adresse'}, { icon:'👑', lbl:'Luxus', sub:'Marmor, Smart Home, Luxusküche', next:'adresse'}, ],
+ }, grund_flaeche: { title: 'Wie groß ist das Grundstück?', type: 'fields', fields: [{ name:'grundstueck',l:'Grundstücksfläche in m²', placeholder:'z.B. 800', validate:'grundstueck', hint:'Bitte einen Wert zwischen 50 und 100.000 m² eingeben.'}], next: 'grund_erschlossen',
+ }, grund_erschlossen: { title: 'Ist das Grundstück erschlossen?', type: 'options', cols: 1, key: 'erschlossen', tooltip: { l: 'Welche Option passt zu mir?', text: 'Erschlossen: Strom, Wasser, Kanal & Straße vorhanden. Teilerschlossen: Einige Anschlüsse fehlen noch. Unerschlossen: Keine Versorgungsanschlüsse vorhanden.'
+   }, options: [
+  { icon:'✅', lbl:'Erschlossen', sub:'Alle Anschlüsse vorhanden', next:'grund_zuschnitt'}, { icon:'⚠️', lbl:'Teilerschlossen',sub:'Einige Anschlüsse fehlen', next:'grund_zuschnitt'}, { icon:'❌', lbl:'Unerschlossen',  sub:'Keine Anschlüsse vorhanden', next:'grund_zuschnitt'}, ],
+ }, grund_zuschnitt: { title: 'Wie ist der Grundstückszuschnitt?', type: 'options', cols: 1, key: 'zuschnitt', options: [
+  { icon:'🔲', lbl:'Eckgrundstück', sub:'An zwei Straßen', next:'grund_bebauung'}, { icon:'▭',  lbl:'Rechteckiger Zuschnitt', sub:'Rechteckig, nutzbar', next:'grund_bebauung'}, { icon:'🔀', lbl:'Sonstiges', sub:'Unregelmäßige Form', next:'grund_bebauung'}, ],
+ }, grund_bebauung: { title: 'Wie sind die Bebauungsmöglichkeiten?', type: 'options', cols: 1, key: 'bebauung', options: [
+  { icon:'🏗️', lbl:'Kurzfristig bebaubar', sub:'Baugenehmigung möglich', next:'adresse'}, { icon:'⚠️', lbl:'Eingeschränkt bebaubar',  sub:'Auflagen / Einschränkungen', next:'adresse'}, { icon:'🚫', lbl:'Nicht bebaubar', sub:'Keine Bebauung erlaubt', next:'adresse'}, { icon:'❓', lbl:'Weiß nicht', sub:'Keine Information vorhanden', next:'adresse'}, ],
+ }, adresse: { title: 'Wo befindet sich Ihre Immobilie?', type: 'fields', fields: [
+  { name:'strasse',l:'Straße & Hausnummer', placeholder:'z.B. Leopoldstraße 12', full:true, validate:'strasse'}, { name:'plz', l:'PLZ', placeholder:'80807',  validate:'plz'}, { name:'ort', l:'Ort', placeholder:'München', validate:'ort'}, ], next: 'lage_muenchen',  // dynamisch: München → Stadtteil-Lage, sonst → kontakt
+ }, lage_muenchen: { title: 'In welcher Lage befindet sich die Immobilie?', type: 'lage_step',  // custom renderer
+    key: 'lage', next: 'kontakt',
+ }, kontakt: { title: 'Ihre Bewertung steht bereit!', subtitle: 'Bestätigen Sie kurz Ihre Daten.', type: 'kontakt',
+ },
+};
+let currentStep = 'root';
+let numVal = 1;
+function totalSteps() { return 8;
+}
+function depthIndex() { return Math.min(path.length, totalSteps());
+}
+function updateProgress() { const pct = Math.round((depthIndex() / totalSteps()) * 100); document.getElementById('prog-fill').style.width = pct + '%'; document.getElementById('prog-label').textContent = 'Schritt ' + (path.length + 1); document.getElementById('prog-pct').textContent = pct + '%';
+}
+function updateBreadcrumb() { const cat = d.kategorie || ''; const typ = d.haus_typ || d.wohnung_typ || ''; let parts = []; if (cat) parts.push(cat); if (typ) parts.push(typ); const bc = document.getElementById('breadcrumb'); bc.innerHTML = parts.length ? parts.map((p,i) => i===parts.length-1 ? `<span>${p}</span>` : p).join(' › ') : '';
+}
+function reflow(el) { void el.offsetWidth;}
+function render(id) { currentStep = id; updateProgress(); updateBreadcrumb(); const s = STEPS[id]; if (!s) return; const card = document.getElementById('mk-card'); card.style.animation = 'none'; reflow(card); card.style.animation = ''; const cont = document.getElementById('step-content'); cont.innerHTML = ''; const titleEl = document.createElement('div'); titleEl.className = 'step-title'; titleEl.textContent = s.title; cont.appendChild(titleEl); if (s.type === 'options') renderOptions(s, cont); else if (s.type === 'fields') renderFields(s, cont); else if (s.type === 'num_picker') renderNumPicker(s, cont); else if (s.type === 'mfh_miete') renderMfhMiete(s, cont); else if (s.type === 'lage_step') renderLageStep(s, cont); else if (s.type === 'kontakt') renderKontakt(cont);
+}
+function renderOptions(s, cont) { if (s.tooltip) { const tw = document.createElement('div'); tw.className = 'tooltip-wrap'; tw.innerHTML = `<div class="tip-icon">?</div><div class="tip-label">${s.tooltip.l}</div><div class="tooltip-box">${s.tooltip.text}</div>`; tw.addEventListener('click', () => tw.classList.toggle('open')); cont.appendChild(tw); cont.appendChild(document.createElement('br'));
+ }
+  const grid = document.createElement('div'); grid.className = 'option-grid' + (s.cols===3?' cols-3':s.cols===1?' cols-1':''); s.options.forEach(o => { const card = document.createElement('div'); card.className = 'opt' + (d[s.key]===o.lbl?' selected':''); card.innerHTML = `<div class="opt-icon">${o.icon}</div><div class="opt-text"><div class="lbl">${o.lbl}</div><div class="sub">${o.sub}</div></div>`; card.onclick = () => { if(s.key) d[s.key]=o.lbl; if(o.next) goTo(o.next);}; grid.appendChild(card);
+ }); cont.appendChild(grid); if (path.length > 0) cont.appendChild(backBtn());
+}
+const YEAR_NOW = new Date().getFullYear();
+const VALIDATORS = { flaeche:     v => { const n=parseFloat(v.replace(',','.')); return (!isNaN(n)&&n>=10&&n<=2000) ? null : 'Bitte einen realistischen Wert zwischen 10 und 2.000 m² eingeben.';}, grundstueck: v => { const n=parseFloat(v.replace(',','.')); return (!isNaN(n)&&n>=50&&n<=100000) ? null : 'Bitte einen Wert zwischen 50 und 100.000 m² eingeben.';}, baujahr:     v => { const n=parseInt(v); return (!isNaN(n)&&n>=1850&&n<=YEAR_NOW) ? null : `Bitte ein gültiges Jahr zwischen 1850 und ${YEAR_NOW} eingeben.`;}, einheiten:   v => { const n=parseInt(v); return (!isNaN(n)&&n>=3&&n<=999) ? null : 'Mindestens 3 Wohneinheiten für ein Mehrfamilienhaus.';}, miete:       v => { if(!v) return null; const n=parseFloat(v.replace(/[.,\s]/g,'')); return (!isNaN(n)&&n>=0&&n<=50000000) ? null : 'Bitte einen plausiblen Betrag in € eingeben.';}, plz:         v => /^\d{5}$/.test(v.trim()) ? null : 'Bitte eine gültige 5-stellige PLZ eingeben.', strasse:     v => v.trim().length>=5 ? null : 'Bitte Straße und Hausnummer eingeben.', ort:         v => v.trim().length>=2 ? null : 'Bitte den Ort eingeben.', email:       v => { const clean = v.trim().toLowerCase(); if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(clean)) return 'Bitte eine gültige E-Mail-Adresse eingeben (z.B. max@beispiel.de).'; const local = clean.split('@')[0]; if(/^(.)\1{3,}$/.test(local)) return 'Bitte eine echte E-Mail-Adresse eingeben.'; if(['test','asdf','qwer','1234','aaaa','abcd','xxxx'].some(s=>local===s)) return 'Bitte eine echte E-Mail-Adresse eingeben.'; return null;
+ }, phone: v => { const clean = v.replace(/[\s\-\/().+]/g,''); if(!/^\d{10,15}$/.test(clean)) return 'Bitte eine gültige Telefonnummer eingeben (mind. 10 Ziffern).'; if(/^(\d)\1{8,}$/.test(clean)) return 'Bitte eine echte Telefonnummer eingeben.'; if(['1234567890','0123456789','9876543210','1111111111','0000000000'].some(s=>clean.endsWith(s)||clean===s)) return 'Bitte eine echte Telefonnummer eingeben.'; if(!/^(0|00\d{2})/.test(clean) && !/^\+/.test(v.trim())) return 'Bitte eine gültige Telefonnummer mit Vorwahl eingeben (z.B. 0170 123 456).'; return null;
+ }, name: v => { const t = v.trim(); if(t.length < 3) return 'Bitte Vor- und Nachname eingeben.'; if(!/\s/.test(t)) return 'Bitte Vor- und Nachname eingeben.'; if(/^(.)\1+$/.test(t.replace(/\s/g,''))) return 'Bitte einen echten Namen eingeben.'; return null;
+ },
+};
+function validate(rule, value) { if (!rule || !VALIDATORS[rule]) return null; return VALIDATORS[rule](value);
+}
+function showFieldError(inputEl, msg) { inputEl.classList.add('invalid'); inputEl.classList.remove('valid'); let errEl = inputEl.parentElement.querySelector('.field-err'); if (!errEl) { errEl=document.createElement('div'); errEl.className='field-err'; inputEl.after(errEl);}
+  errEl.textContent = msg; errEl.classList.add('show');
+}
+function clearFieldError(inputEl) { inputEl.classList.remove('invalid'); inputEl.classList.add('valid'); const errEl = inputEl.parentElement.querySelector('.field-err'); if (errEl) { errEl.textContent=''; errEl.classList.remove('show');}
+}
+function attachLiveValidation(inputEl, rule) { if (!rule) return; inputEl.addEventListener('blur', () => { const err = validate(rule, inputEl.value); if (err) showFieldError(inputEl, err); else clearFieldError(inputEl);
+ }); inputEl.addEventListener('input', () => { if (inputEl.classList.contains('invalid')) { const err = validate(rule, inputEl.value); if (!err) clearFieldError(inputEl); }
+ });
+}
+function renderFields(s, cont) { const pairs = groupFields(s.fields); pairs.forEach(pair => { if (pair.length === 2) { const row = document.createElement('div'); row.className='field-row'; pair.forEach(f => row.appendChild(makeField(f))); cont.appendChild(row); } else { cont.appendChild(makeField(pair[0])); }
+ }); const btn = document.createElement('button'); btn.className = 'mk-btn'; btn.textContent = 'Weiter →'; btn.onclick = () => { let ok = true; s.fields.forEach(f => { const el = document.getElementById('fi_'+f.name); if (!el) return; d[f.name] = el.value.trim(); if (!f.optional) { const err = validate(f.validate, d[f.name]) || (!d[f.name] ? 'Dieses Feld ist erforderlich.' : null); if (err) { showFieldError(el, err); ok=false;}
+  else clearFieldError(el); }
+   }); if (!ok) { flashBtn(btn,'Bitte Eingaben prüfen'); return;}
+    goTo(s.next);
+ }; cont.appendChild(btn); if (path.length > 0) cont.appendChild(backBtn());
+}
+function makeField(f) { const g = document.createElement('div'); g.className='fg'; g.innerHTML = `<label>${f.l}</label><input type="text" id="fi_${f.name}" placeholder="${f.placeholder}" value="${d[f.name]||''}">`; if (f.hint) { const h=document.createElement('div'); h.className='input-hint'; h.textContent=f.hint; g.appendChild(h);}
+  setTimeout(() => { const inp = document.getElementById('fi_'+f.name); if (inp && f.validate) attachLiveValidation(inp, f.validate);
+ }, 0); return g;
+}
+function renderNumPicker(s, cont) { numVal = d[s.key] ? parseInt(d[s.key]) : Math.max(s.min||1, 1); const subEl = document.createElement('div'); subEl.style.cssText='font-size:13px;color:var(--neutral--500);margin-bottom:.75rem'; subEl.textContent = s.sub || ''; cont.appendChild(subEl); const picker = document.createElement('div'); picker.className='num-picker'; picker.innerHTML = `<button class="num-btn" id="num-minus">−</button><div class="num-val" id="num-disp">${numVal}</div><button class="num-btn" id="num-plus">+</button>`; cont.appendChild(picker); document.getElementById('num-minus').onclick = () => { if(numVal>s.min) { numVal--; document.getElementById('num-disp').textContent=numVal;}}; document.getElementById('num-plus').onclick  = () => { if(numVal<s.max) { numVal++; document.getElementById('num-disp').textContent=numVal;}}; const orEl = document.createElement('span'); orEl.className='num-or'; orEl.textContent='– oder direkt eingeben –'; cont.appendChild(orEl); const wrap = document.createElement('div'); wrap.className='num-input-wrap'; const inp = document.createElement('input'); inp.className='num-custom'; inp.type='number'; inp.min=s.min; inp.max=s.max; inp.placeholder='Anzahl eingeben'; inp.oninput = e => { const v=parseInt(e.target.value); if(!isNaN(v)){numVal=v;document.getElementById('num-disp').textContent=v;}}; wrap.appendChild(inp); cont.appendChild(wrap); const btn = document.createElement('button'); btn.className='mk-btn'; btn.style.marginTop='1rem'; btn.textContent='Weiter →'; btn.onclick = () => { d[s.key] = String(numVal); goTo(s.next);}; cont.appendChild(btn); if (path.length > 0) cont.appendChild(backBtn());
+}
+function renderMfhMiete(s, cont) { const desc = document.createElement('p'); desc.style.cssText='font-size:13px;color:var(--neutral--500);line-height:1.6;margin-bottom:1rem'; desc.textContent='Bitte trage die aktuelle Jahresmiete (Ist-Miete) sowie die mögliche Jahresmiete (Sollmiete) ein. Falls Dir keine Daten vorliegen, kannst Du das Feld leer lassen – wir schätzen den Wert anhand der ortsüblichen Miete.'; cont.appendChild(desc); [
+    { name:'ist_miete', l:'Aktuelle Jahresmiete (Ist-Miete) (€)', placeholder:'z.B. 48.000', optional:true, validate:'miete', hint:'Nur Zahlen, z.B. 48000 oder 48.000'}, { name:'soll_miete',l:'Mögliche Jahresmiete (Sollmiete) (€)', placeholder:'z.B. 56.000', optional:true, validate:'miete', hint:'Nur Zahlen, z.B. 56000 oder 56.000'}, ].forEach(f => { cont.appendChild(makeField(f));
+ }); const btn = document.createElement('button'); btn.className='mk-btn'; btn.textContent='Weiter →'; btn.onclick = () => { let ok = true; ['ist_miete','soll_miete'].forEach(n => { const el=document.getElementById('fi_'+n); if(el){ d[n]=el.value.trim(); if(d[n]){ const err=validate('miete',d[n]); if(err){showFieldError(el,err);ok=false;}else clearFieldError(el);}}
+   }); if(!ok){flashBtn(btn,'Bitte Eingaben prüfen');return;}
+    goTo(s.next);
+ }; cont.appendChild(btn); if (path.length > 0) cont.appendChild(backBtn());
+}
+const _SL={
+'Altstadt-Lehel':'beste','Maxvorstadt':'beste','Ludwigsvorstadt-Isarvorstadt':'gut_zentral',
+'Schwabing-West':'gut_zentral','Bogenhausen':'gut_zentral','Neuhausen-Nymphenburg':'gut_zentral',
+'Au-Haidhausen':'gut_zentral','Schwabing-Freimann':'gut','Schwanthalerhöhe':'gut',
+'Untergiesing-Harlaching':'gut','Sendling':'gut','Thalkirchen-Obersendling-Forstenried-Fürstenried-Solln':'gut',
+'Laim':'mittel','Pasing-Obermenzing':'mittel','Berg am Laim':'mittel',
+'Obergiesing-Fasangarten':'mittel','Ramersdorf-Perlach':'mittel','Hadern':'mittel',
+'Moosach':'mittel','Sendling-Westpark':'mittel','Milbertshofen-Am Hart':'mittel',
+'Trudering-Riem':'mittel','Allach-Untermenzing':'einfach','Aubing-Lochhausen-Langwied':'einfach',
+'Feldmoching-Hasenbergl':'einfach'
+};
+const _PS={
+'80331':'Altstadt-Lehel','80333':'Altstadt-Lehel','80335':'Maxvorstadt','80336':'Ludwigsvorstadt-Isarvorstadt',
+'80337':'Ludwigsvorstadt-Isarvorstadt','80339':'Neuhausen-Nymphenburg','80469':'Ludwigsvorstadt-Isarvorstadt','80538':'Bogenhausen',
+'80539':'Bogenhausen','80634':'Neuhausen-Nymphenburg','80636':'Neuhausen-Nymphenburg','80637':'Neuhausen-Nymphenburg',
+'80638':'Neuhausen-Nymphenburg','80639':'Neuhausen-Nymphenburg','80686':'Laim','80687':'Laim',
+'80689':'Pasing-Obermenzing','80796':'Schwabing-West','80797':'Schwabing-West','80798':'Schwabing-West',
+'80799':'Maxvorstadt','80801':'Schwabing-West','80802':'Schwabing-West','80803':'Schwabing-West',
+'80804':'Schwabing-Freimann','80805':'Schwabing-Freimann','80807':'Milbertshofen-Am Hart','80809':'Milbertshofen-Am Hart',
+'80933':'Feldmoching-Hasenbergl','80935':'Feldmoching-Hasenbergl','80937':'Milbertshofen-Am Hart','80939':'Schwabing-Freimann',
+'81241':'Aubing-Lochhausen-Langwied','81243':'Aubing-Lochhausen-Langwied','81245':'Aubing-Lochhausen-Langwied','81247':'Allach-Untermenzing',
+'81249':'Allach-Untermenzing','81369':'Sendling','81371':'Sendling','81373':'Sendling',
+'81375':'Hadern','81377':'Hadern','81379':'Thalkirchen-Obersendling-Forstenried-Fürstenried-Solln','81476':'Thalkirchen-Obersendling-Forstenried-Fürstenried-Solln',
+'81477':'Thalkirchen-Obersendling-Forstenried-Fürstenried-Solln','81479':'Thalkirchen-Obersendling-Forstenried-Fürstenried-Solln','81539':'Obergiesing-Fasangarten','81541':'Au-Haidhausen',
+'81543':'Untergiesing-Harlaching','81545':'Untergiesing-Harlaching','81547':'Untergiesing-Harlaching','81549':'Untergiesing-Harlaching',
+'81667':'Au-Haidhausen','81669':'Au-Haidhausen','81671':'Au-Haidhausen','81673':'Berg am Laim',
+'81675':'Bogenhausen','81677':'Bogenhausen','81679':'Bogenhausen','81735':'Ramersdorf-Perlach',
+'81737':'Ramersdorf-Perlach','81739':'Ramersdorf-Perlach','81825':'Trudering-Riem','81827':'Trudering-Riem',
+'81829':'Trudering-Riem'
+};
+const _ML = { 'einfach':    { w: 0.82, h: 0.80, g: 0.75,l: 'Einfache Lage', hinweis: 'Randlage, einfaches Umfeld (z.B. Feldmoching, Aubing)'}, 'mittel':     { w: 1.00, h: 1.00, g: 1.00,l: 'Mittlere Lage', hinweis: 'Durchschnittliche Wohnlage (z.B. Laim, Moosach, Ramersdorf)'}, 'gut':        { w: 1.12, h: 1.14, g: 1.18,l: 'Gute Lage', hinweis: 'Gutes Wohnumfeld, ruhig (z.B. Sendling, Untergiesing)'}, 'gut_zentral':{ w: 1.28, h: 1.30, g: 1.45,l: 'Gute zentrale Lage',_x: 'Sehr gefragt, zentral (z.B. Schwabing, Bogenhausen, Neuhausen)'}, 'beste':      { w: 1.49, h: 1.52, g: 1.75,l: 'Beste Lage', hinweis: 'Toplagen Innenstadt (z.B. Altstadt-Lehel, Maxvorstadt)'},
+};
+const _AM={'Einfach':0.88,'Normal':1.0,'Gehoben':1.14,'Luxus':1.32};
+function getmuenchenLage() { const plz = (d.plz||'').trim(); const ort = (d.ort||'').toLowerCase(); if (_PS[plz]) { const stadtteil = _PS[plz]; return _SL[stadtteil] || 'mittel';
+ }
+  return d.lage || 'mittel';
+}
+function getLageFaktor() { const lage = getmuenchenLage(); const isMuenchen = (d.plz||'').startsWith('80') || (d.plz||'').startsWith('81') ||
+  (d.ort||'').toLowerCase().includes('münchen'); if (!isMuenchen) return 1.0; const kat = d.kategorie || ''; const lageDat = _ML[lage] || _ML['mittel']; if (kat === 'Haus bewerten')        return lageDat.h; if (kat === 'Grundstück bewerten')  return lageDat.g; return lageDat.w;
+}
+function renderLageStep(s, cont) { const isMuenchen = (d.plz||'').startsWith('80') || (d.plz||'').startsWith('81') ||
+  (d.ort||'').toLowerCase().includes('münchen'); if (!isMuenchen) { d.lage = 'mittel'; goTo(s.next); return;}
+  const autoStadtteil = _PS[(d.plz||'').trim()]; const autoLage      = autoStadtteil ? (_SL[autoStadtteil] || 'mittel') : null; if (autoLage && autoStadtteil) { const hint = document.createElement('div'); hint.style.cssText = 'background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:var(--radius-sm);padding:.6rem .9rem;font-size:12px;color:var(--teal-dark);margin-bottom:1rem;line-height:1.5'; hint.innerHTML = `<strong>Automatisch erkannt:</strong> ${autoStadtteil} → <strong>${_ML[autoLage].l}</strong><br><span style="font-size:11px">${_ML[autoLage].hinweis}</span>`; cont.appendChild(hint);
+ }
+  const sub = document.createElement('p'); sub.style.cssText = 'font-size:13px;color:var(--neutral--500);margin-bottom:1rem;line-height:1.5'; sub.innerHTML = 'Bitte Wohnlage anhand der <a href="https://geoportal.muenchen.de/portal/lagekarten/" target="_blank" style="color:var(--teal)">Lagekarte München (GAA)</a>:'; cont.appendChild(sub); const lageItems = [
+    { key:'einfach', icon:'⬜', lbl:'Einfache Lage', sub:'Randlage, Feldmoching, Aubing, Hasenbergl'}, { key:'mittel', icon:'🟦', lbl:'Mittlere Lage', sub:'Laim, Moosach, Ramersdorf, Berg am Laim'}, { key:'gut', icon:'🟩', lbl:'Gute Lage', sub:'Sendling, Untergiesing, Hadern, Thalkirchen'}, { key:'gut_zentral', icon:'🟧', lbl:'Gute zentrale Lage',  sub:'Schwabing, Bogenhausen, Neuhausen, Au-Haidhausen'}, { key:'beste', icon:'🟥', lbl:'Beste Lage', sub:'Altstadt-Lehel, Maxvorstadt, Isarvorstadt'}, ]; const grid = document.createElement('div'); grid.className = 'option-grid cols-1'; const selected = autoLage || d.lage || 'mittel'; lageItems.forEach(item => { const card = document.createElement('div'); card.className = 'opt' + (selected === item.key ? ' selected' : ''); card.innerHTML = `<div class="opt-icon">${item.icon}</div><div class="opt-text"><div class="lbl">${item.lbl}</div><div class="sub">${item.sub}</div></div>`; card.onclick = () => { d.lage = item.key; goTo(s.next);}; grid.appendChild(card);
+ }); cont.appendChild(grid); if (path.length > 0) cont.appendChild(backBtn());
+}
+function renderKontakt(cont) { const nudge = document.createElement('div'); nudge.className='nudge'; nudge.id='nudge'; nudge.innerHTML='<p><strong>Gleich geschafft!</strong> Ihre Daten werden nur zur Übermittlung der Bewertung genutzt – kein Spam, keine Weitergabe an Dritte.</p>'; cont.appendChild(nudge); const sub = document.createElement('p'); sub.style.cssText='font-size:13px;color:var(--neutral--500);margin-bottom:1rem'; sub.textContent='Bestätigen Sie kurz Ihre Daten.'; cont.appendChild(sub); const contactFields = [
+    { name:'name', l:'Vor- & Nachname',  placeholder:'Max Mustermann', type:'text',  validate:'name',  hint:'Bitte Vor- und Nachname eingeben.'}, { name:'email',l:'E-Mail-Adresse', placeholder:'max@beispiel.de', type:'email', validate:'email', hint:'Format: name@domain.de'}, { name:'phone',l:'Mobilnummer', placeholder:'0170 / 123 456 78', type:'tel', validate:'phone', hint:'Mit Vorwahl, mind. 10 Ziffern.'}, ]; contactFields.forEach(f => { const g = document.createElement('div'); g.className='fg'; g.innerHTML = `<label>${f.l}</label><input type="${f.type}" id="fi_${f.name}" placeholder="${f.placeholder}" autocomplete="off" value="${d[f.name]||''}">`; if(f.hint){ const h=document.createElement('div'); h.className='input-hint'; h.textContent=f.hint; g.appendChild(h);}
+    cont.appendChild(g); if(f.name==='phone'){ g.querySelector('input').addEventListener('focus', ()=>{ document.getElementById('nudge').style.display='block';}); }
+    setTimeout(()=>{ const inp=document.getElementById('fi_'+f.name); if(inp) attachLiveValidation(inp, f.validate);}, 0);
+ }); const cw = document.createElement('div'); cw.className='consent-wrap'; cw.innerHTML=`<input type="checkbox" id="consent"><label for="consent">Ich stimme der <a href="#" onclick="return false">Datenschutzerklärung</a> von MK Immobilien Consulting sowie einer möglichen Kontaktaufnahme zu.</label>`; cont.appendChild(cw); const btn = document.createElement('button'); btn.className='mk-btn'; btn.id='submit-btn'; btn.textContent='Kostenlose Bewertung anfordern →'; btn.onclick = submitForm; cont.appendChild(btn); const errEl = document.createElement('div'); errEl.className='err'; errEl.id='err'; cont.appendChild(errEl); const trust = document.createElement('div'); trust.className='trust-row'; trust.innerHTML=`<div class="trust-item"><span>✓</span> Kostenlos & unverbindlich</div><div class="trust-item"><span>✓</span> Kein Spam</div><div class="trust-item"><span>✓</span> Antwort innerhalb 24h</div>`; cont.appendChild(trust); if (path.length > 0) cont.appendChild(backBtn());
+}
+function goTo(id) { path.push(currentStep); render(id); window.scrollTo({top:0,behavior:'smooth'});
+}
+function goBack() { if (!path.length) return; currentStep = path.pop(); render(currentStep); window.scrollTo({top:0,behavior:'smooth'});
+}
+function backBtn() { const b = document.createElement('button'); b.className='mk-btn-back'; b.textContent='← Zurück'; b.onclick = goBack; return b;
+}
+function flashBtn(btn, msg) { const orig = btn.textContent; btn.disabled=true; btn.textContent=msg; setTimeout(() => { btn.textContent=orig; btn.disabled=false;}, 1800);
+}
+async function submitForm() { const fields = ['name','email','phone']; const rules  = { name:'name', email:'email', phone:'phone'}; const err    = document.getElementById('err'); const btn    = document.getElementById('submit-btn'); const con    = (document.getElementById('consent')||{}).checked; let ok = true; fields.forEach(name => { const el = document.getElementById('fi_'+name); if (!el) return; d[name] = el.value.trim(); const msg = validate(rules[name], d[name]); if (msg) { showFieldError(el, msg); ok=false;}
+    else clearFieldError(el);
+ }); if (!ok) { err.textContent='Bitte die markierten Felder korrigieren.'; err.style.display='block'; return;}
+  if (!con) { err.textContent='Bitte der Datenschutzerklärung zustimmen.'; err.style.display='block'; return;}
+  err.style.display='none'; btn.disabled=true; btn.textContent='Wird gesendet...'; const fieldMap = { 'Kategorie': d.kategorie, 'Haus-Typ': d.haus_typ, 'Wohnungstyp': d.wohnung_typ, 'Wohnfläche': d.wohnflaeche ? d.wohnflaeche+' m²' : undefined, 'Grundstücksfläche': d.grundstueck ? d.grundstueck+' m²' : undefined, 'Wohneinheiten': d.mfh_einheiten, 'Ist-Miete (Jahr)': d.ist_miete ? d.ist_miete+' €' : undefined, 'Soll-Miete (Jahr)': d.soll_miete ? d.soll_miete+' €' : undefined, 'Zimmer': d.zimmer, 'Baujahr': d.baujahr, 'Ausstattung': d.ausstattung, 'Lage (München)': d.lage, 'Erschlossen': d.erschlossen, 'Zuschnitt': d.zuschnitt, 'Bebauung': d.bebauung, 'Straße': d.strasse, 'PLZ': d.plz, 'Ort': d.ort,
+ }; const payload = { access_key: KEY, subject: 'Neue Immobilienbewertung – ' + d.name + ' | ' + (d.kategorie||''), from_name: 'MK Immobilien Funnel', name: d.name, email: d.email, phone: d.phone,
+ }; Object.entries(fieldMap).forEach(([k,v]) => { if(v) payload[k]=v;}); try { const res = await fetch('https://api.web3forms.com/submit', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload)
+   }); const json = await res.json(); if (json.success) showResult(); else { btn.disabled=false; btn.textContent='Kostenlose Bewertung anfordern →'; err.textContent='Fehler beim Senden – bitte erneut versuchen.'; err.style.display='block';}
+ } catch(e) { btn.disabled=false; btn.textContent='Kostenlose Bewertung anfordern →'; err.textContent='Netzwerkfehler – bitte erneut versuchen.'; err.style.display='block';
+ }
+}
+const ADS_KEY = window.MK_ADS_KEY || '';
+const ADS_BASE = 'https://api.kleinanzeigen-agent.de/ads/v1/kleinanzeigen/search';
+const _PD={
+};
+const _RF = { grossstadt:  [4500, 5000, 700], mittelstadt: [2800, 3200, 320], kleinstadt:  [2000, 2400, 200], land:        [1500, 1900, 130],
+};
+const _MZ={1:8802,2:8331,3:8190,4:8387,5:8242};
+const _MN={wohnung:10537,haus:10572,grund:3200};
+const _MH = { 'Einfamilienhaus':   {b: 9006,n: 10572}, 'Zweifamilienhaus':  {b: 7800,n:  9500}, // interpoliert
+  'Mehrfamilienhaus':  {b: 7446,n:  8800}, 'Reihenendhaus':     {b: 9256,n: 10800}, 'Reihenmittelhaus':  {b: 8314,n:  9900}, 'Doppelhaushälfte':  {b: 8565,n: 10100},
+};
+const MUENCHEN_LAGE = { 'Einfach':  6942 / 8402,  // 0.826
+  'Normal':   8402 / 8402,  // 1.000
+  'Gehoben': 10384 / 8402,  // 1.236
+  'Luxus':   13000 / 8402,  // ~1.55 (extrapoliert aus FT-Immobilien24)
+};
+function getTypIndex(){const k=d.kategorie||'';return k==='Grundstück bewerten'?2:k==='Haus bewerten'?1:0;}
+function basispreisVonPLZ() { const plz    = (d.plz||'').trim(); const typIdx = getTypIndex(); const kat    = d.kategorie || ''; const typ    = d.haus_typ || d.wohnung_typ || ''; const zimmer = parseInt(d.zimmer||'0'); const year   = parseInt(d.baujahr||'0'); const isNeubau = year >= 2021; // von Poll Trennlinie: 1991-2020 vs. Neubau ab 2021
+  const isMuenchen = plz.startsWith('80') || plz.startsWith('81'); if (isMuenchen) { if (kat === 'Haus bewerten') { const seg = _MH[typ]; if (seg) return isNeubau ? seg.n : seg.b; return isNeubau ? _MN.haus : 8450; }
+    if (kat === 'Wohnung bewerten') { if (isNeubau) return _MN.wohnung; // 10.537 €/m² (immoverkauf24)
+  const maxZ = Math.min(zimmer||3, 5); return zimmer >= 1 ? (_MZ[maxZ] || 8402) : 8402; }
+    if (kat === 'Grundstück bewerten')
+  return isNeubau ? _MN.grund : 2900;
+ }
+  for (const len of [2, 3, 1]) { const key = plz.slice(0, len); if (_PD[key]) return _PD[key][typIdx];
+ }
+  return null;
+}
+function getQualityMult(){return _AM[d.ausstattung]||1.0;}
+function basispreisVonOrt(){return null;}
+function getBasispreis() { return basispreisVonPLZ() || basispreisVonOrt() || _RF.mittelstadt[getTypIndex()];
+}
+const _TM={
+'Einfamilienhaus':1.05,'Zweifamilienhaus':0.98,'Mehrfamilienhaus':0.92,'Reihenendhaus':0.95,
+'Reihenmittelhaus':0.88,'Doppelhaushälfte':0.91,'Dachgeschoss':1.08,'Erdgeschoss':0.88,
+'Etagenwohnung':1.0,'Maisonette':1.05,'Penthouse':1.30,'Souterrain':0.82,
+'Terrassenwohnung':1.06
+};
+const _QM = { 'Einfach':0.80, 'Normal':1.0, 'Gehoben':1.25, 'Luxus':1.60};
+function baujahr_faktor(by){
+if(!by)return 1.0;
+const yr=parseInt(by),kat=d.kategorie||'',isH=kat==='Haus bewerten',isW=kat==='Wohnung bewerten';
+if(yr>=2024)return isH?1.32:isW?1.28:1.25;
+if(yr>=2021)return isH?1.25:isW?1.22:1.18;
+if(yr>=2018)return isH?1.13:isW?1.11:1.08;
+if(yr>=2010)return isH?1.06:isW?1.05:1.03;
+if(yr>=2000)return 1.00;
+if(yr>=1991)return isH?0.93:isW?0.95:0.90;
+if(yr>=1978)return isH?0.86:isW?0.89:0.83;
+if(yr>=1960)return isH?0.82:isW?0.85:0.80;
+if(yr>=1945)return isH?0.77:isW?0.81:0.75;
+return isW?0.85:0.73;
+}
+function renditespannen(){
+const t=d.haus_typ||d.wohnung_typ||'',k=d.kategorie||'';
+if(t==='Mehrfamilienhaus')return{lo:.030,hi:.045};
+if(k==='Haus bewerten')return{lo:.026,hi:.038};
+if(k==='Wohnung bewerten')return{lo:.028,hi:.040};
+return{lo:.026,hi:.035};
+}
+const _TQ={
+'Einfamilienhaus':['Einfamilienhaus','Haus kaufen'],'Zweifamilienhaus':['Zweifamilienhaus','Doppelhaus kaufen'],
+'Mehrfamilienhaus':['Mehrfamilienhaus','Renditeobjekt'],'Reihenendhaus':['Reihenendhaus','Reihenhaus kaufen'],
+'Reihenmittelhaus':['Reihenmittelhaus','Reihenhaus kaufen'],'Doppelhaushälfte':['Doppelhaushälfte','Doppelhaus kaufen'],
+'Dachgeschoss':['Dachgeschosswohnung','Wohnung kaufen'],'Erdgeschoss':['Erdgeschosswohnung','Wohnung kaufen'],
+'Etagenwohnung':['Eigentumswohnung','ETW kaufen'],'Maisonette':['Maisonette','Wohnung kaufen'],
+'Penthouse':['Penthouse','Wohnung kaufen'],'Souterrain':['Souterrainwohnung','Wohnung kaufen'],
+'Terrassenwohnung':['Terrassenwohnung','Wohnung kaufen']
+};
+const _GQ = ['Grundstück kaufen','Baugrundstück','Bauplatz'];
+async function apiCall(q, location, radius, limit) { const url = new URL(ADS_BASE); url.searchParams.set('query', q + ' kaufen'); url.searchParams.set('limit', String(limit||50)); if (location) url.searchParams.set('location', location); if (radius)   url.searchParams.set('radius', String(radius)); const res = await fetch(url.toString(), { headers: { 'ads_key': ADS_KEY, 'Content-Type': 'application/json'}
+ }); if (!res.ok) throw new Error('HTTP '+res.status); const json = await res.json(); return Array.isArray(json) ? json
+    : (json.data||json.results||json.listings||json.ads||json.items||[]);
+}
+function extractPrice(item) { const cands=[item.price,item.preis,item.kaufpreis,item.askingPrice, item.attributes?.price,item.attributes?.priceAmount, item.details?.price,item.details?.preis,item.ad?.price,item.listing?.price]; for(const raw of cands){ if(raw==null) continue; if(typeof raw==='number'&&raw>10000&&raw<30000000) return raw; const n=parseInt(String(raw).replace(/\./g,'').replace(',','').replace(/[^\d]/g,'')); if(!isNaN(n)&&n>10000&&n<30000000) return n;
+ }
+  const text=(item.title||'')+' '+(item.description||''); const m=text.match(/(\d[\d.]{3,8})\s*€/); if(m){const n=parseInt(m[1].replace(/\./g,'')); if(!isNaN(n)&&n>10000&&n<30000000) return n;}
+  return null;
+}
+function extractFlaeche(item) { const cands=[item.livingSpace,item.wohnflaeche,item.area,item.flaeche, item.attributes?.livingSpace,item.attributes?.area,item.details?.livingSpace]; for(const c of cands){const n=parseFloat(String(c||'').replace(',','.')); if(!isNaN(n)&&n>10&&n<3000) return n;}
+  const m=((item.title||'')+' '+(item.description||'')).match(/(\d+(?:[.,]\d+)?)\s*(?:m²|qm|m2)/i); if(m){const n=parseFloat(m[1].replace(',','.')); if(!isNaN(n)&&n>10&&n<3000) return n;}
+  return null;
+}
+function extractBaujahr(item) { const cands=[item.yearBuilt,item.baujahr,item.constructionYear, item.attributes?.yearBuilt,item.details?.yearBuilt]; for(const c of cands){const n=parseInt(String(c||'')); if(!isNaN(n)&&n>=1850&&n<=new Date().getFullYear()) return n;}
+  const m=(item.description||'').match(/[Bb]aujahr[:\s]+(\d{4})/); if(m){const n=parseInt(m[1]); if(n>=1850&&n<=new Date().getFullYear()) return n;}
+  return null;
+}
+function extractZimmer(item) { const cands=[item.rooms,item.zimmer,item.numberOfRooms,item.attributes?.rooms,item.details?.rooms]; for(const c of cands){const n=parseFloat(String(c||'').replace(',','.')); if(!isNaN(n)&&n>=1&&n<=30) return n;}
+  return null;
+}
+function isRecent(item) { const raw=item.date||item.datum||item.publishedAt||item.createdAt||item.posted_at||''; if(!raw) return true; try{return new Date(raw).getTime()>Date.now()-2*365.25*24*3600000;}catch{return true;}
+}
+function similarityScore(item) { let s=1.0; const userF=parseFloat((d.wohnflaeche||d.grundstueck||'').replace(',','.')); const listF=extractFlaeche(item); if(userF>0&&listF){const rel=Math.abs(userF-listF)/userF; s*=Math.max(0.25,1-rel*1.5);}
+  const userZ=parseInt(d.zimmer||'0'); const listZ=extractZimmer(item); if(userZ>0&&listZ){const diff=Math.abs(userZ-listZ); s*=Math.max(0.5,1-diff*0.2);}
+  const userBy=parseInt(d.baujahr||''); const listBy=extractBaujahr(item); if(!isNaN(userBy)&&listBy){s*=Math.max(0.45,1-Math.abs(userBy-listBy)/55);}
+  if(!isRecent(item)) s*=0.4; return s;
+}
+function winsorize(arr,lo=0.10,hi=0.90){ if(arr.length<4) return arr; const s=[...arr].sort((a,b)=>a-b); return arr.filter(v=>v>=s[Math.floor(s.length*lo)]&&v<=s[Math.floor(s.length*hi)]);
+}
+function computeStats(prices){ if(!prices.length) return null; const s=[...prices].sort((a,b)=>a-b); return{avg:Math.round(s.reduce((a,v)=>a+v,0)/s.length), median:s[Math.floor(s.length/2)], p25:s[Math.floor(s.length*0.25)]||s[0], p75:s[Math.floor(s.length*0.75)]||s[s.length-1], min:s[0],max:s[s.length-1],count:s.length};
+}
+async function analyseMarkt() { const typ    = d.haus_typ || d.wohnung_typ || ''; const plz    = (d.plz||'').trim(); const ort    = (d.ort||'').trim(); const loc    = plz || ort; const basisSqm = getBasispreis(); const typM     = _TM[typ] || 1.0; const qualM    = getQualityMult(); // Ausstattungsfaktor
+  const lageM    = getLageFaktor(); // Lage-Faktor (München Stadtteil)
+  const baufakM  = baujahr_faktor(d.baujahr); const adjSqm   = Math.round(basisSqm * typM * qualM * lageM * baufakM); const flaeche  = parseFloat((d.wohnflaeche||d.grundstueck||'100').replace(',','.'))||100; let apiScore    = null; let topListings = []; let apiCount    = 0; if (loc) { const queries = d.kategorie==='Grundstück bewerten'
+  ? _GQ : (_TQ[typ]||['Immobilie kaufen']); const stufen = [{r:null,lim:80},{r:15,lim:80}]; let allItems = []; for (const st of stufen) { try { const r1 = await apiCall(queries[0], loc, st.r, st.lim).catch(()=>[]); const r2 = queries[1] ? await apiCall(queries[1], loc, st.r, 40).catch(()=>[]) : []; const seen = new Set(allItems.map(i=>i.id||i.adid||(i.title||'').slice(0,20)+(extractPrice(i)||''))); const neu  = [...r1,...r2].filter(i=>{ const id=i.id||i.adid||(i.title||'').slice(0,20)+(extractPrice(i)||''); if(seen.has(id)) return false; seen.add(id); return true; }); allItems = [...allItems,...neu]; if(allItems.filter(i=>extractPrice(i)).length>=8) break; } catch(e){}
+   }
+    const sqmPrices=[]; const scored=[]; allItems.forEach(item=>{ const price=extractPrice(item); if(!price) return; const sc=similarityScore(item); scored.push({item,price,score:sc}); const fl=extractFlaeche(item); if(fl&&fl>10) sqmPrices.push({sqm:price/fl,score:sc}); }); scored.sort((a,b)=>b.score-a.score); topListings=scored.slice(0,5).map(s=>s.item); apiCount=allItems.filter(i=>extractPrice(i)).length; if(sqmPrices.length>=4){ const wSqm=sqmPrices.filter(x=>x.sqm>500&&x.sqm<20000)
+  .sort((a,b)=>b.score-a.score).slice(0,20); if(wSqm.length>=3){ const vals=winsorize(wSqm.map(x=>x.sqm)); const avgSqm=vals.reduce((a,v)=>a+v,0)/vals.length; const corr=Math.max(0.6,Math.min(1.4,avgSqm/basisSqm)); apiScore=Math.round(adjSqm*corr); }
+   }
+ }
+  const finalSqm  = apiScore || adjSqm; const finalWert = Math.round(finalSqm * flaeche); const rangeMin  = Math.round(finalWert * 0.87); const rangeMax  = Math.round(finalWert * 1.13); const isMuenchen = (d.plz||'').startsWith('80') || (d.plz||'').startsWith('81'); const dbSource = isMuenchen
+    ? 'Immoportal.com + Immowelt Q1/2026'
+    : 'Marktdatenbank Q1/2026'; const srcLabel  = apiCount>0
+    ? `${plz||ort}${apiCount>5?' ('+apiCount+' Inserate)':''} + ${dbSource}`
+    : `${plz||ort} · ${dbSource}`; const conf = apiCount>=15?'hoch':apiCount>=6?'mittel':'auf Basis Marktdaten'; return{finalWert,finalSqm,rangeMin,rangeMax,flaeche,topListings, srcLabel,conf,apiCount,basisSqm,adjSqm,typM,qualM,lageM,baufakM,usedApiCorrection:!!apiScore};
+}
+function ertragswert() { const istRaw=(d.ist_miete||'').replace(/[.,\s]/g,''); const sollRaw=(d.soll_miete||'').replace(/[.,\s]/g,''); let istJahr=parseInt(istRaw)||0; let sollJahr=parseInt(sollRaw)||0; if(istJahr>0&&istJahr<20000) istJahr*=12; if(sollJahr>0&&sollJahr<20000) sollJahr*=12; if(!istJahr&&!sollJahr) return null; const miete=istJahr||sollJahr; const span=renditespannen(); return{mieteJahr:miete,istJahr,sollJahr, wertLo:Math.round(miete/span.hi), wertMid:Math.round(miete/((span.lo+span.hi)/2)), wertHi:Math.round(miete/span.lo), rendLo:(span.lo*100).toFixed(1),rendHi:(span.hi*100).toFixed(1)};
+}
+function confColor(c){ return c==='hoch'?'#1D9E75':c==='mittel'?'#d97706':'#6b7280';
+}
+async function showResult() { document.getElementById('prog-fill').style.width='100%'; document.getElementById('prog-label').textContent='Fertig'; document.getElementById('prog-pct').textContent='100%'; document.getElementById('breadcrumb').innerHTML=''; const card = document.getElementById('mk-card'); card.style.animation='none'; reflow(card); card.style.animation=''; const cont = document.getElementById('step-content'); const fmt  = n => new Intl.NumberFormat('de-DE').format(Math.round(n)); const fmtR = n => Number(n).toFixed(1).replace('.',','); cont.innerHTML=`
+    <div class="step-title" style="margin-bottom:.75rem">Marktanalyse läuft…</div>
+    <div style="font-size:13px;color:var(--neutral--500);margin-bottom:1.25rem;line-height:1.6">
+  Wertermittlung für <strong style="color:var(--dark-slate-blue)">${(d.ort||d.plz||'Ihre Region')}</strong> –<br>
+  Marktdatenbank + lokale Inserate kombiniert.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px" id="lsteps">
+  ${['Marktdatenbank Q1/2026…', `Lokale Inserate PLZ ${d.plz||d.ort||''}…`, 'Scoring & Typ-Anpassung…', 'Ertragswert-Berechnung…', 'Ergebnis wird berechnet…']
+  .map((t,i)=>`<div id="ls${i}" style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--neutral--500);opacity:${i===0?1:0.4};transition:opacity .3s">
+  <div id="lsi${i}" style="width:14px;height:14px;border:2px solid ${i===0?'transparent':'var(--neutral--400)'};border-top-color:${i===0?'var(--teal)':'transparent'};border-radius:50%;${i===0?'animation:_sp .7s linear infinite':''}flex-shrink:0"></div>
+  ${t}</div>`).join('')}
+    </div>
+    <style>@keyframes _sp{to{transform:rotate(360deg)}}</style>`; [600,1200,1900,2600].forEach((ms,i)=>setTimeout(()=>{ const prev=document.getElementById('ls'+i); const next=document.getElementById('ls'+(i+1)); if(prev){prev.style.opacity='1';const ic=document.getElementById('lsi'+i);if(ic)ic.outerHTML=`<div style="width:14px;height:14px;color:var(--teal);font-size:13px;line-height:14px;flex-shrink:0">✓</div>`;}
+    if(next){next.style.opacity='1';const ic=document.getElementById('lsi'+(i+1));if(ic)ic.style.cssText='width:14px;height:14px;border:2px solid transparent;border-top-color:var(--teal);border-radius:50%;animation:_sp .7s linear infinite;flex-shrink:0';}
+ },ms)); let result=null; let usedFallback=false; try { result=await analyseMarkt();} catch(e){ usedFallback=true;}
+  if(!result){ usedFallback=true; const basisSqm=getBasispreis()||3000; const flaeche=parseFloat((d.wohnflaeche||d.grundstueck||'100').replace(',','.'))||100; const adj=Math.round(basisSqm*(_AM[d.ausstattung]||1.0)*getLageFaktor()*baujahr_faktor(d.baujahr)); result={finalWert:adj*flaeche,finalSqm:adj,rangeMin:Math.round(adj*flaeche*0.87), rangeMax:Math.round(adj*flaeche*1.13),flaeche,topListings:[], srcLabel:'Marktdaten Q1/2026',conf:'auf Basis Marktdaten',apiCount:0, basisSqm,adjSqm:adj,usedApiCorrection:false};
+ }
+  const qf = getQualityMult(); // Ausstattungs-Faktor
+  const lf = result.lageM || getLageFaktor(); // Lage-Faktor München
+  const ew = ertragswert(); const hasEW = ew !== null; const totalLo = hasEW ? Math.min(result.rangeMin, ew.wertLo) : result.rangeMin; const totalHi = hasEW ? Math.max(result.rangeMax, ew.wertHi) : result.rangeMax; const listHtml = result.topListings.length>0 ? `
+    <div style="margin-top:1.25rem">
+  <div style="font-size:11px;font-weight:500;color:var(--neutral--500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">Ähnliche Vergleichsinserate</div>
+  ${result.topListings.map(l=>{ const price=extractPrice(l); const fl=extractFlaeche(l); const by=extractBaujahr(l); const loc=(l.location&&(l.location.city||l.location.zipCode))||l.ort||l.city||''; const title=(l.title||l.titel||'Immobilie').replace(/</g,'&lt;'); const url=l.url||l.link||'#'; const sqmV=fl&&price?Math.round(price/fl):null; return `<a href="${url}" target="_blank" rel="noopener" style="display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:.5px solid var(--neutral--400);gap:10px;text-decoration:none">
+  <div style="overflow:hidden;flex:1;min-width:0">
+  <div style="font-size:13px;color:var(--dark-slate-blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title.substring(0,50)}</div>
+  <div style="font-size:11px;color:var(--neutral--500);margin-top:2px">${[loc,fl?fl+' m²':'',by?'Bj. '+by:'',sqmV?sqmV+' €/m²':''].filter(Boolean).join(' · ')}</div>
+  </div>
+  <div style="font-size:13px;font-weight:500;color:var(--teal);flex-shrink:0">${price?fmt(price)+' €':'–'}</div>
+  </a>`; }).join('')}
+    </div>` : ''; const ewHtml = hasEW ? `
+    <div style="margin-top:1.25rem;border:.5px solid var(--teal-mid);border-radius:var(--radius-sm);overflow:hidden">
+  <div style="background:var(--teal-light);padding:.6rem 1rem;font-size:11px;font-weight:500;color:var(--teal-dark);text-transform:uppercase;letter-spacing:.05em">Ertragswert-Methode (Nettokaltmiete)</div>
+  <div style="padding:.9rem 1rem">
+  <div style="font-size:12px;color:var(--neutral--500);margin-bottom:.6rem;line-height:1.5">
+  Jahres-Nettokaltmiete: <strong style="color:var(--dark-slate-blue)">${fmt(ew.mieteJahr)} €</strong>
+  ${ew.istJahr&&ew.sollJahr&&ew.istJahr!==ew.sollJahr?` (Ist: ${fmt(ew.istJahr)} € / Soll: ${fmt(ew.sollJahr)} €)`:''}
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+  <div style="background:var(--neutral--300);border-radius:var(--radius-sm);padding:.65rem;text-align:center">
+  <div style="font-size:9px;color:var(--neutral--500);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Bei ${fmtR(ew.rendHi)} % Rendite</div>
+  <div style="font-size:14px;font-weight:500;color:var(--dark-slate-blue)">${fmt(ew.wertLo)} €</div>
+  <div style="font-size:9px;color:var(--neutral--500);margin-top:2px">Untere Spanne</div>
+  </div>
+  <div style="background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:var(--radius-sm);padding:.65rem;text-align:center">
+  <div style="font-size:9px;color:var(--teal-dark);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Mittlere Rendite</div>
+  <div style="font-size:14px;font-weight:500;color:#085041">${fmt(ew.wertMid)} €</div>
+  <div style="font-size:9px;color:var(--teal-dark);margin-top:2px">Ertragswert</div>
+  </div>
+  <div style="background:var(--neutral--300);border-radius:var(--radius-sm);padding:.65rem;text-align:center">
+  <div style="font-size:9px;color:var(--neutral--500);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Bei ${fmtR(ew.rendLo)} % Rendite</div>
+  <div style="font-size:14px;font-weight:500;color:var(--dark-slate-blue)">${fmt(ew.wertHi)} €</div>
+  <div style="font-size:9px;color:var(--neutral--500);margin-top:2px">Obere Spanne</div>
+  </div>
+  </div>
+  <div style="font-size:11px;color:var(--neutral--500);margin-top:.6rem">
+  Renditespanne ${fmtR(ew.rendLo)}–${fmtR(ew.rendHi)} % (${d.haus_typ||d.wohnung_typ||d.kategorie||'Immobilie'}, marktüblich)
+  </div>
+  </div>
+    </div>` : ''; const isHausR = (d.kategorie||'') === 'Haus bewerten'; const isWohnR = (d.kategorie||'') === 'Wohnung bewerten'; const _by=parseInt(d.baujahr||'0'),_kat2=d.kategorie||'',_iH=_kat2==='Haus bewerten',_iW=_kat2==='Wohnung bewerten';
+const bfLabel=!_by?'':_by>=2024?(_iH?'Neubau 2024+ Haus +32%':_iW?'Neubau 2024+ ETW +28%':'Neubau 2024+ +25%'):_by>=2021?(_iH?'Neubau 2021-23 Haus +25%':_iW?'Neubau 2021-23 ETW +22%':'Neubau 2021-23 +18%'):_by>=2018?(_iH?'2018-20 +13%':'2018-20 +11%'):_by>=2010?'2010-17 +4-6%':_by>=2000?'2000-09 Referenz':_by>=1991?(_iW?'1991-99 ETW -5%':'1991-99 -7%'):_by>=1978?(_iW?'1978-90 ETW -11%':'1978-90 -14%'):_by>=1960?'1960-77 -15/-18%':_by>=1945?'Nachkrieg -19/-23%':(_iW?'Gründerzeit ETW -15%':'Altbau <1945 -27%'); const adjHtml = `
+    <div style="background:var(--neutral--300);border-radius:var(--radius-sm);padding:.75rem 1rem;font-size:11px;color:var(--neutral--500);line-height:1.9;margin-top:.75rem">
+  <div style="font-weight:600;color:var(--dark-slate-blue);font-family:var(--font-display);letter-spacing:.03em;margin-bottom:.35rem;font-size:12px">Berechnungsgrundlage</div>
+  Marktbasis <strong style="color:var(--dark-slate-blue)">${fmt(result.basisSqm)} €/m²</strong>
+  · PLZ ${d.plz||d.ort||'–'}
+  ${result.typM&&result.typM!==1.0?` · Objekttyp ${result.typM>1?'+':''}${Math.round((result.typM-1)*100)} %`:''}
+  ${qf!==1.0?` · Ausstattung „${d.ausstattung||'Normal'}" ${qf>1?'+':''}${Math.round((qf-1)*100)} %`:''}
+  ${(()=>{if(lf===1.0||!d.lage)return '';const ld=_ML[d.lage];return ld?` · Lage: <strong style="color:var(--dark-slate-blue)">${ld.l}</strong> ${lf>1?'+':''}${Math.round((lf-1)*100)} %`:''})()}
+  ${bfLabel?`<br><span style="color:var(--teal)">▸</span> <strong style="color:var(--dark-slate-blue)">${bfLabel}</strong>`:''}
+  <br>→ <strong style="color:var(--teal);font-size:12px">${fmt(result.finalSqm)} €/m² · Wertindikation ${fmt(result.rangeMin)}–${fmt(result.rangeMax)} €</strong>
+  ${result.usedApiCorrection?'<br><span style="color:var(--teal)">✓</span> Verfeinert durch lokale Inserate (Kleinanzeigen.de)':''}
+    </div>`; card.style.animation='none'; reflow(card); card.style.animation=''; cont.innerHTML=`
+    <div class="step-title">Ihre Marktanalyse</div>
+    <div class="result-hero">
+  <div class="result-lbl">Geschätzter Marktwert (Vergleichswert)</div>
+  <div class="result-range">${fmt(result.rangeMin)} – ${fmt(result.rangeMax)} €</div>
+  <div class="result-sub">~${fmt(result.finalSqm)} €/m² · Fläche: ${fmt(result.flaeche)} m²</div>
+    </div>
+    ${hasEW?`<div style="background:var(--neutral--300);border-radius:var(--radius-sm);padding:.6rem 1rem;font-size:13px;color:var(--neutral--500);margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center">
+  <span><strong style="color:var(--dark-slate-blue)">Gesamtspanne (beide Methoden)</strong></span>
+  <span style="font-weight:500;color:var(--teal)">${fmt(totalLo)} – ${fmt(totalHi)} €</span>
+    </div>`:''}
+    <div style="display:flex;align-items:center;gap:8px;padding:.55rem .8rem;background:var(--neutral--300);border-radius:var(--radius-sm);font-size:12px;margin-bottom:.5rem">
+  <div style="width:8px;height:8px;border-radius:50%;background:${confColor(result.conf)};flex-shrink:0"></div>
+  <div style="flex:1"><span style="color:var(--dark-slate-blue);font-weight:500">Datenbasis:</span> <span style="color:var(--neutral--500)">${result.srcLabel}</span></div>
+  <div style="font-size:11px;color:${confColor(result.conf)};font-weight:500">${result.conf}</div>
+    </div>
+    ${adjHtml}
+    ${ewHtml}
+    ${listHtml}
+    <p class="success-msg" style="margin-top:1.25rem">Vielen Dank, <strong>${d.name}</strong>! Für eine präzise Bewertung vor Ort melden wir uns unter <strong>${d.phone}</strong>.</p>
+    <div style="font-size:10px;color:var(--neutral--500);margin-top:.25rem">Stand: ${new Date().toLocaleDateString('de-DE')} · Angaben ohne Gewähr</div>
+    <div class="trust-row">
+  <div class="trust-item"><span>✓</span> Kostenlos & unverbindlich</div>
+  <div class="trust-item"><span>✓</span> Persönliche Beratung</div>
+  <div class="trust-item"><span>✓</span> Antwort innerhalb 24h</div>
+    </div>
+  `;
+}
+function groupFields(fields) { const pairs=[]; let i=0; while(i<fields.length){ if(fields[i].full){ pairs.push([fields[i]]); i++;}
+    else if(i+1<fields.length&&!fields[i+1].full){ pairs.push([fields[i],fields[i+1]]); i+=2;}
+    else { pairs.push([fields[i]]); i++;}
+ }
+  return pairs;
+}
+render('root');
+})();
